@@ -343,8 +343,8 @@ def build_grounded_prompt(query: str, context_block: str) -> str:
     Grounded prompt theo 4 quy tắc:
     1. Evidence-only  2. Abstain  3. Citation  4. Short & clear
     """
-    return f"""Answer only from the retrieved context below.
-If the context is insufficient to answer the question, respond with exactly: "Không đủ dữ liệu"
+    return f"""Your are an internal IT Helpdesk assistant. Answer only from the retrieved context below.
+If the context is insufficient to answer the question, say that you cannot find the information in the document, show the revelant information you have found so far and finally ask for IT Helpdesk support.
 Cite the source number in brackets like [1] when possible.
 Keep your answer short, clear, and factual.
 Respond in the same language as the question.

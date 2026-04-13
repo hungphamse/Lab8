@@ -22,14 +22,13 @@ llm_model = gpt-4o-mini
 **Scorecard Baseline:**
 | Metric | Average Score |
 |--------|--------------|
-| Faithfulness | ? /5 |
-| Answer Relevance | ? /5 |
-| Context Recall | ? /5 |
-| Completeness | ? /5 |
+| Faithfulness | 4.80 /5 |
+| Answer Relevance | 4.30 /5 |
+| Context Recall | 5.00 /5 |
+| Completeness | 4.40 /5 |
 
 **Câu hỏi yếu nhất (điểm thấp):**
-> TODO: Liệt kê 2-3 câu hỏi có điểm thấp nhất và lý do tại sao.
-> Ví dụ: "q07 (Approval Matrix) - context recall = 1/5 vì dense bỏ lỡ alias."
+> q09 (ERR-403-AUTH) - context recall = 1/5 vì dense bỏ lỡ alias.
 
 **Giả thuyết nguyên nhân (Error Tree):**
 - [ ] Indexing: Chunking cắt giữa điều khoản
@@ -43,52 +42,34 @@ llm_model = gpt-4o-mini
 
 ## Variant 1 (Sprint 3)
 
-**Ngày:** ___________  
-**Biến thay đổi:** ___________  
+**Ngày:** 13/04/2026 
+**Biến thay đổi:** retrieval_mode, use_rerank
 **Lý do chọn biến này:**
-> TODO: Giải thích theo evidence từ baseline results.
-> Ví dụ: "Chọn hybrid vì q07 (alias query) và q09 (mã lỗi ERR-403) đều thất bại với dense.
+> Chọn hybrid vì q07 (alias query) và q09 (mã lỗi ERR-403) đều thất bại với dense.
 > Corpus có cả ngôn ngữ tự nhiên (policy) lẫn tên riêng/mã lỗi (ticket code, SLA label)."
 
 **Config thay đổi:**
 ```
-retrieval_mode = "hybrid"   # hoặc biến khác
+retrieval_mode: "hybrid"
+use_rerank: False
 # Các tham số còn lại giữ nguyên như baseline
 ```
 
 **Scorecard Variant 1:**
 | Metric | Baseline | Variant 1 | Delta |
 |--------|----------|-----------|-------|
-| Faithfulness | ?/5 | ?/5 | +/- |
-| Answer Relevance | ?/5 | ?/5 | +/- |
-| Context Recall | ?/5 | ?/5 | +/- |
-| Completeness | ?/5 | ?/5 | +/- |
+| Faithfulness | 4.8/5 | 4.9/5 | +0.1 |
+| Answer Relevance | 4.3/5 | 4.0/5 | -0.3 |
+| Context Recall | 5/5 | 5/5 | +0.0 |
+| Completeness | 4.4/5 | 4.2/5 | -0.2 |
 
 **Nhận xét:**
-> TODO: Variant 1 cải thiện ở câu nào? Tại sao?
-> Có câu nào kém hơn không? Tại sao?
+> Sau khi chạy, dựa theo kết quả, variant cải thiện không đáng kể các metric, thậm chí có một số metric mà baseline nhỉnh hơn
+> Lí do: Có thể do cách agent "giám khảo" chấm điểm ở những câu hỏi đấy
 
 **Kết luận:**
-> TODO: Variant 1 có tốt hơn baseline không?
-> Bằng chứng là gì? (điểm số, câu hỏi cụ thể)
-
----
-
-## Variant 2 (nếu có thời gian)
-
-**Biến thay đổi:** ___________  
-**Config:**
-```
-# TODO
-```
-
-**Scorecard Variant 2:**
-| Metric | Baseline | Variant 1 | Variant 2 | Best |
-|--------|----------|-----------|-----------|------|
-| Faithfulness | ? | ? | ? | ? |
-| Answer Relevance | ? | ? | ? | ? |
-| Context Recall | ? | ? | ? | ? |
-| Completeness | ? | ? | ? | ? |
+> Chưa đủ bằng chứng để đánh giá chính xác là variant 1 hay baseline tốt hơn
+> Thậm chí baseline nhỉnh hơn ở các câu q02, q06, q10
 
 ---
 
@@ -97,10 +78,10 @@ retrieval_mode = "hybrid"   # hoặc biến khác
 > TODO (Sprint 4): Điền sau khi hoàn thành evaluation.
 
 1. **Lỗi phổ biến nhất trong pipeline này là gì?**
-   > _____________
+   > 
 
 2. **Biến nào có tác động lớn nhất tới chất lượng?**
-   > _____________
+   > Không đánh giá được. Tuy nhiên, khi thay đổi ground promp thì điểm số từ agent giám khảo thay đổi rõ rệt ở tất cả các metric và giữa các variant
 
 3. **Nếu có thêm 1 giờ, nhóm sẽ thử gì tiếp theo?**
-   > _____________
+   > Xây dựng thêm các câu hỏi khác mà không thể tìm thấy trong tài liệu. Đồng thời thử nghiệm thêm các promt
