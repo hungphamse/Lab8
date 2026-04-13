@@ -1,0 +1,67 @@
+# Báo Cáo Cá Nhân — Lab Day 08: RAG Pipeline
+**Họ và tên:**Nguyễn Quốc Nam
+**Vai trò trong nhóm:** Tech Lead
+**Ngày nộp:** 13/04/2026
+**Độ dài yêu cầu:** 500–800 từ
+
+---
+
+## 1. Tôi đã làm gì trong lab này? (100-150 từ)
+
+Trong lab này, tôi đảm nhận vai trò Tech Lead và tập trung chủ yếu vào Sprint 1, 2 và 3.
+
+Ở Sprint 1, tôi implement `get_embedding()` sử dụng OpenAI `text-embedding-3-small` và `build_index()` — pipeline đọc 5 file `.txt`, preprocess, chunk theo section heading, embed từng chunk rồi batch upsert vào ChromaDB với metadata đầy đủ (`source`, `section`, `department`, `effective_date`, `access`).
+
+Ở Sprint 2, tôi implement `retrieve_dense()` để query ChromaDB bằng embedding similarity và `call_llm()` gọi GPT-4o-mini với `temperature=0` để sinh câu trả lời grounded.
+
+Ở Sprint 3, tôi chọn và implement variant **Hybrid Retrieval + Rerank** — kết hợp BM25 và dense search qua Reciprocal Rank Fusion, sau đó dùng cross-encoder `ms-marco-MiniLM-L-6-v2` để rerank top kết quả trước khi đưa vào prompt.
+
+Ở Sprint 4, tôi chấm điểm 5 câu đầu (Q1–Q5) và viết `docs/tuning-log.md`. Công việc của tôi là nền tảng để Quang Hưng wrap `rag_answer()`, chạy `compare_retrieval_strategies()` và sinh scorecard.
+
+---
+
+## 2. Điều tôi hiểu rõ hơn sau lab này (100-150 từ)
+
+Concept tôi thực sự hiểu sâu hơn sau lab là **Reciprocal Rank Fusion (RRF)** trong hybrid retrieval.
+
+Trước khi làm lab, tôi nghĩ hybrid retrieval chỉ đơn giản là lấy kết quả dense rồi cộng điểm với BM25. Nhưng khi implement mới thấy vấn đề: score của hai hệ thống có đơn vị hoàn toàn khác nhau — cosine similarity dao động 0–1, còn BM25 score có thể lên đến hàng chục tùy corpus. Cộng trực tiếp sẽ khiến một hệ thống lấn át hệ thống kia.
+
+RRF giải quyết điều này bằng cách chỉ dùng **thứ hạng** thay vì điểm số thô: `score = w * 1/(60 + rank)`. Hằng số 60 giúp giảm chênh lệch giữa rank 1 và rank 2 khi cả hai đều tốt, tránh việc chunk đứng đầu một list bị đánh giá quá cao. Sau khi implement và chạy thử, tôi thấy hybrid với RRF nhất quán hơn baseline dense trên các query có keyword chính xác như "Level 3" hay "P1".
+
+---
+
+## 3. Điều tôi ngạc nhiên hoặc gặp khó khăn (100-150 từ)
+
+Khó khăn lớn nhất là **ChromaDB 1.4.0 breaking changes**. Ban đầu tôi khởi tạo collection theo docs cũ:
+
+```python
+client.get_or_create_collection(name="rag_lab", metadata={"hnsw:space": "cosine"})
+```
+
+Chạy lên ngay lập tức lỗi `TypeError: argument 'name': 'ellipsis' object cannot be converted to 'PyString'` — khá khó hiểu vì tên collection trông hoàn toàn bình thường. Sau khi debug mới phát hiện ChromaDB 1.x dùng Rust backend, bắt buộc phải truyền `embedding_function` rõ ràng thay vì để `None`. Phải tạo class `_PassthroughEF` giả để bypass, đồng thời thêm `__init__` để tránh `DeprecationWarning`.
+
+Điều ngạc nhiên thứ hai là **đoạn placeholder cũ bị sót** trong `build_index()` — sau khi upsert xong, code lại chạy thêm một lần preprocess và chunk nữa, làm tổng chunk báo cáo gấp đôi thực tế (58 thay vì 29) và print "embedding chưa implement" dù đã implement xong. Mất khoảng 20 phút mới tìm ra do đoạn đó nằm lẫn trong vòng lặp, không nổi bật.
+
+---
+
+## 4. Phân tích một câu hỏi trong scorecard (150-200 từ)
+
+**Câu hỏi:** `Q03 — "Ai phải phê duyệt để cấp quyền Level 3?"`
+
+**Phân tích:**
+
+Đây là câu hỏi tôi thấy thú vị nhất vì nó test cả retrieval lẫn generation cùng lúc.
+
+Ở **baseline dense**, pipeline retrieve đúng chunk từ `access_control_sop.txt` — section "Phân cấp quyền truy cập" có đề cập Level 3. Tuy nhiên câu trả lời chỉ nêu được "IT Security Manager" mà bỏ sót điều kiện đi kèm: yêu cầu phải có thêm phê duyệt của CISO nếu quyền truy cập thuộc hệ thống production. Điểm Completeness chỉ đạt 3/5 vì thiếu ngoại lệ quan trọng này. Faithfulness và Relevance đều 4/5 vì thông tin có trong context, không hallucinate.
+
+Lỗi nằm ở **generation**: prompt đủ context nhưng model chọn câu trả lời ngắn, không bao phủ hết điều kiện ngoại lệ trong chunk.
+
+Ở **variant hybrid + rerank**, cross-encoder rerank đẩy chunk chứa điều kiện ngoại lệ production lên top-2 thay vì bị đẩy xuống dưới. Kết quả câu trả lời đầy đủ hơn, Completeness tăng lên 4/5. Đây là minh chứng rõ nhất cho giá trị của rerank trong bộ corpus này.
+
+---
+
+## 5. Nếu có thêm thời gian, tôi sẽ làm gì? (50-100 từ)
+
+Tôi sẽ thử **Query Expansion** cho các câu hỏi có alias. Kết quả eval cho thấy Q04 về "ERR-403-AUTH" bị abstain dù document `it_helpdesk_faq.txt` có đề cập lỗi authentication — chỉ là dùng tên khác. Nếu dùng LLM expand query thành "lỗi xác thực, authentication error, 403" trước khi retrieve, khả năng cao context recall sẽ tăng từ 0 lên 1.0 cho câu này mà không cần thay đổi gì ở indexing hay generation.
+
+---
