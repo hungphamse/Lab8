@@ -76,10 +76,31 @@ def retrieve_dense(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any]
         # Lưu ý: distances trong ChromaDB cosine = 1 - similarity
         # Score = 1 - distance
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement retrieve_dense().\n"
-        "Tham khảo comment trong hàm để biết cách query ChromaDB."
+    import chromadb
+    from index import get_embedding, CHROMA_DB_DIR
+
+    client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+    collection = client.get_collection("rag_lab")
+
+    query_embedding = get_embedding(query)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"]
     )
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+
+    return [
+        {
+            "text": doc,
+            "metadata": meta,
+            "score": 1 - dist  # cosine similarity
+        }
+        for doc, meta, dist in zip(documents, metadatas, distances)
+    ]
+    
 
 
 # =============================================================================
@@ -109,10 +130,41 @@ def retrieve_sparse(query: str, top_k: int = TOP_K_SEARCH) -> List[Dict[str, Any
         scores = bm25.get_scores(tokenized_query)
         top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
     """
-    # TODO Sprint 3: Implement BM25 search
-    # Tạm thời return empty list
-    print("[retrieve_sparse] Chưa implement — Sprint 3")
-    return []
+    from rank_bm25 import BM25Okapi
+    from index import CHROMA_DB_DIR
+    import chromadb
+    
+    client = chromadb.PersistentClient(path=str(CHROMA_DB_DIR))
+    collection = client.get_collection("rag_lab")
+    
+    # Lấy toàn bộ dữ liệu từ collection (trả về dict chứ không phải list)
+    all_chunks = collection.get(include=["documents", "metadatas"])
+    documents = all_chunks.get("documents", [])
+    metadatas = all_chunks.get("metadatas", [])
+    
+    if not documents:
+        return []
+    
+    # Tokenize corpus để train mô hình BM25Okapi
+    tokenized_corpus = [doc.lower().split() for doc in documents]
+    bm25 = BM25Okapi(tokenized_corpus)
+    
+    # Tokenize query và tính điểm số
+    tokenized_query = query.lower().split()
+    scores = bm25.get_scores(tokenized_query)
+    
+    # Sắp xếp và lấy ra top_k kết quả điểm cao nhất
+    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+    
+    # Trả về format chuẩn để tương thích với các hàm khác
+    return [
+        {
+            "text": documents[i],
+            "metadata": metadatas[i],
+            "score": float(scores[i])
+        }
+        for i in top_indices
+    ]
 
 
 # =============================================================================
@@ -150,8 +202,20 @@ def retrieve_hybrid(
     """
     # TODO Sprint 3: Implement hybrid RRF
     # Tạm thời fallback về dense
-    print("[retrieve_hybrid] Chưa implement RRF — fallback về dense")
-    return retrieve_dense(query, top_k)
+    dense_results = retrieve_dense(query, top_k)
+    sparse_results = retrieve_sparse(query, top_k)
+
+    rrf_scores: dict[str, float] = {}
+    for rank, chunk in enumerate(dense_results):
+        doc_id = chunk["metadata"]["source"]
+        rrf_scores[doc_id] = dense_weight * (1 / (60 + rank))
+    
+    for rank, chunk in enumerate(sparse_results):
+        doc_id = chunk["metadata"]["source"]
+        rrf_scores[doc_id] += sparse_weight * (1 / (60 + rank))
+    
+    ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+    return [chunk for chunk, _ in ranked[:top_k]]
 
 
 # =============================================================================
@@ -249,7 +313,7 @@ def build_context_block(chunks: List[Dict[str, Any]]) -> str:
         text = chunk.get("text", "")
 
         # TODO: Tùy chỉnh format nếu muốn (thêm effective_date, department, ...)
-        header = f"[{i}] {source}"
+        header = f"[{i}] {source}\n\nEffective date: {meta.get('effective_date', 'N/A')}\n"
         if section:
             header += f" | {section}"
         if score > 0:
@@ -316,10 +380,15 @@ def call_llm(prompt: str) -> str:
 
     Lưu ý: Dùng temperature=0 hoặc thấp để output ổn định cho evaluation.
     """
-    raise NotImplementedError(
-        "TODO Sprint 2: Implement call_llm().\n"
-        "Chọn Option A (OpenAI) hoặc Option B (Gemini) trong TODO comment."
+    from openai import OpenAI
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,     # temperature=0 để output ổn định, dễ đánh giá
+        max_tokens=512,
     )
+    return response.choices[0].message.content
 
 
 def rag_answer(
@@ -437,7 +506,7 @@ def compare_retrieval_strategies(query: str) -> None:
     print(f"Query: {query}")
     print('='*60)
 
-    strategies = ["dense", "hybrid"]  # Thêm "sparse" sau khi implement
+    strategies = ["dense", "sparse", "hybrid"]  # Thêm "sparse" sau khi implement
 
     for strategy in strategies:
         print(f"\n--- Strategy: {strategy} ---")
@@ -481,9 +550,9 @@ if __name__ == "__main__":
             print(f"Lỗi: {e}")
 
     # Uncomment sau khi Sprint 3 hoàn thành:
-    # print("\n--- Sprint 3: So sánh strategies ---")
-    # compare_retrieval_strategies("Approval Matrix để cấp quyền là tài liệu nào?")
-    # compare_retrieval_strategies("ERR-403-AUTH")
+    print("\n--- Sprint 3: So sánh strategies ---")
+    compare_retrieval_strategies("Approval Matrix để cấp quyền là tài liệu nào?")
+    compare_retrieval_strategies("ERR-403-AUTH")
 
     print("\n\nViệc cần làm Sprint 2:")
     print("  1. Implement retrieve_dense() — query ChromaDB")
