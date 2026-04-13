@@ -67,6 +67,8 @@ def preprocess_document(raw_text: str, filepath: str) -> Dict[str, Any]:
                 content_lines.append(line)
             elif line.strip() == "" or line.isupper():
                 continue
+            else:
+                content_lines.append(line)
         else:
             content_lines.append(line)
 

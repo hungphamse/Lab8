@@ -39,9 +39,12 @@ _________________
 > - Lỗi nằm ở đâu: indexing / retrieval / generation?
 > - Variant có cải thiện không? Tại sao có/không?
 
-**Câu hỏi:** ___________
+**Câu hỏi:** Approval Matrix để cấp quyền hệ thống là tài liệu nào?
 
 **Phân tích:**
+- Trong tài liệu đề cập rõ việc tài liệu Approval Matrix for System Access đã được đổi tên thành Access Control SOP (access-control-sop.md). Tuy nhiên model vẫn phản hồi là "không tìm thấy thông tin"
+- Lí do ban đầu: Lỗi ở quá trình tiền xử lý tài liệu dẫn đến mất thông tin, do đó dùng variant khác không giải quyết vấn đề
+
 
 _________________
 
@@ -49,13 +52,8 @@ _________________
 
 ## 5. Nếu có thêm thời gian, tôi sẽ làm gì? (50-100 từ)
 
-> 1-2 cải tiến cụ thể bạn muốn thử.
-> Không phải "làm tốt hơn chung chung" mà phải là:
-> "Tôi sẽ thử X vì kết quả eval cho thấy Y."
+> Cải tiến lại khâu tiền xử lý và chunking tài liệu để model có thể nhận diện được các thông tin quan trọng. Đồng thời bổ sung thêm các câu hỏi khác để mở rộng phạm vi đánh giá và tìm ra các lỗi ẩn của RAG pipeline
 
 _________________
 
 ---
-
-*Lưu file này với tên: `reports/individual/[ten_ban].md`*
-*Ví dụ: `reports/individual/nguyen_van_a.md`*
